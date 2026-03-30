@@ -1,17 +1,12 @@
-# PNG 红色转橙色批量工具
+# PNG 红转橙批量工具（v2）
 
-读取 RGBA PNG，在 HSV 中识别红色区域，将其色相映射到橙色，保留亮度、饱和度和透明度后输出 PNG。
+本工具不再做“全量红色硬替换”，而是采用 **semantic_soft_recolor**：
 
-## 功能
-
-- 只处理 `.png`
-- 只改红色区域，其他颜色不变
-- 尺寸保持不变
-- 输出仍为 PNG
-- 保留 alpha 透明通道
-- 支持递归处理目录
-- 支持并发处理、dry-run、单文件失败隔离
-- 提供命令行与可视化界面（Tkinter）
+- 分层识别红色光效 / 强调色与暗红材质
+- 对洋红/粉红高亮做联动偏移
+- 使用软掩码权重混合，避免硬边
+- 增加亮度补偿，减少脏橙/土黄
+- 全程保留 alpha 与原图尺寸
 
 ## 安装
 
@@ -21,54 +16,62 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## 命令行用法
+## CLI 用法
 
 ```bash
-python main.py --input ./input_png --output ./output_png --target-color "#FF8A00"
+python main.py --input ./input_png --output ./output_png --target-color "#FF8A00" --mode semantic_soft_recolor
 ```
 
 ### 参数
 
 - `--input` 输入目录（必填）
 - `--output` 输出目录（必填）
-- `--target-color` 目标颜色，默认 `#FF8A00`
-- `--recursive` 递归扫描（默认开启）
-- `--no-recursive` 仅处理输入目录顶层 PNG
-- `--dry-run` 仅检测不写文件
-- `--workers` 并发数（默认 4）
+- `--target-color` 目标颜色（默认 `#FF8A00`）
+- `--mode` 处理模式（默认 `semantic_soft_recolor`）
+- `--recursive` / `--no-recursive` 递归扫描开关
+- `--dry-run` 只分析不写正式输出
+- `--workers` 并发数
+- `--preview [N]` 生成前 N 张 before/after 对照图（默认 5）
+- `--preview-mask` 输出语义权重掩码图
+- `--max-files` 仅处理前 N 张（0 表示全部）
 
-## 可视化界面用法
+## GUI 用法
 
 ```bash
 python gui.py
 ```
 
-界面中可直接：
+界面支持：
 
-- 选择输入目录与输出目录
-- 设置目标颜色
-- 勾选递归扫描 / Dry Run
-- 设置并发数
-- 查看逐文件处理日志和最终统计
+- 输入/输出目录选择
+- 模式选择（semantic_soft_recolor）
+- 目标颜色设置
+- 递归、dry-run、mask 预览
+- 并发数、preview 数量、max-files 试跑
+- 实时日志（processed / skipped / failed）
+
+## 输出说明
+
+- 正式输出：`<output>/<原目录结构>/*.png`
+- 对照预览：`<output>/_preview/.../*.png`（左 before，右 after）
+- 掩码预览：`<output>/_mask_preview/.../*.png`（灰度权重）
+
+## 代码结构
+
+- `main.py`：CLI + 批处理调度 + preview 输出
+- `processor.py`：文件级处理、RGBA 读写、结果数据结构
+- `color_masks.py`：红光效/洋红联动/暗部抑制权重图
+- `recolor.py`：软混合重着色 + 亮度补偿
+- `gui.py`：可视化界面
+- `requirements.txt`
 
 ## 日志字段
 
-每个文件至少输出：
+每个文件会输出：
 
 - 文件路径
 - 状态：`processed` / `skipped` / `failed`
-- 命中红色像素数
+- 红色主区命中像素数 `red_pixels`
+- 洋红联动区命中像素数 `magenta_pixels`
 - 输出路径
-- 错误信息（失败时）
-
-## 处理逻辑说明
-
-1. 扫描输入目录中的 PNG
-2. 以 RGBA 读取
-3. 转为 HSV（向量化 numpy 实现）
-4. 根据阈值识别红色区域（处理色相环绕）
-5. 将命中区域的色相替换为目标橙色色相
-6. 保留原有饱和度、明度、透明度
-7. 输出到目标目录并保持原有目录结构
-
-> 默认阈值在 `processor.py` 的 `HSVThreshold` 中，可按素材微调。
+- 错误信息

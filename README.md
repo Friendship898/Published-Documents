@@ -36,6 +36,27 @@ python main.py --input ./input_assets --output ./output_assets --source-color "#
 - `--preview-mask` 输出语义权重掩码图
 - `--max-files` 仅处理前 N 张（0 表示全部）
 
+
+## 打包为免环境依赖可执行文件
+
+使用 `PyInstaller` 生成独立可执行文件（CLI / GUI），部署端无需 Python 环境。
+
+```bash
+pip install -r requirements-build.txt
+python package.py --target all --clean-artifacts
+```
+
+可选参数：
+
+- `--target cli|gui|all`：指定打包目标
+- `--onedir`：生成目录模式（默认 onefile 单文件）
+- `--clean-artifacts`：打包前清理 `build/` 与 `dist/`
+
+默认产物：
+
+- `dist/recolor-cli`（或 `recolor-cli.exe`）
+- `dist/recolor-gui`（或 `recolor-gui.exe`）
+
 ## GUI 用法
 
 ```bash

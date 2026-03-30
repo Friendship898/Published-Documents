@@ -3,12 +3,22 @@ from __future__ import annotations
 import argparse
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 from processor import ProcessResult, process_png
 
 
 LOGGER = logging.getLogger("png-red-to-orange")
+
+
+@dataclass
+class BatchSummary:
+    total: int
+    processed: int
+    skipped: int
+    failed: int
 
 
 def setup_logging() -> None:
@@ -65,6 +75,53 @@ def format_log(result: ProcessResult) -> str:
     )
 
 
+def run_batch(
+    input_dir: Path,
+    output_dir: Path,
+    target_color: str,
+    recursive: bool,
+    dry_run: bool,
+    workers: int,
+    on_result: Callable[[ProcessResult], None] | None = None,
+) -> BatchSummary:
+    png_files = find_pngs(input_dir, recursive)
+
+    processed = skipped = failed = 0
+    futures = []
+
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as executor:
+        for in_path in png_files:
+            rel = in_path.relative_to(input_dir)
+            out_path = output_dir / rel
+            futures.append(
+                executor.submit(
+                    process_png,
+                    input_path=in_path,
+                    output_path=out_path,
+                    target_color_hex=target_color,
+                    dry_run=dry_run,
+                )
+            )
+
+        for fut in as_completed(futures):
+            result = fut.result()
+            if on_result is not None:
+                on_result(result)
+            if result.status == "processed":
+                processed += 1
+            elif result.status == "skipped":
+                skipped += 1
+            else:
+                failed += 1
+
+    return BatchSummary(
+        total=len(png_files),
+        processed=processed,
+        skipped=skipped,
+        failed=failed,
+    )
+
+
 def main() -> int:
     args = parse_args()
     setup_logging()
@@ -86,43 +143,30 @@ def main() -> int:
         args.workers,
     )
 
-    processed = skipped = failed = 0
-    futures = []
+    def log_result(result: ProcessResult) -> None:
+        if result.status == "failed":
+            LOGGER.error(format_log(result))
+        else:
+            LOGGER.info(format_log(result))
 
-    with ThreadPoolExecutor(max_workers=max(1, args.workers)) as executor:
-        for in_path in png_files:
-            rel = in_path.relative_to(args.input)
-            out_path = args.output / rel
-            futures.append(
-                executor.submit(
-                    process_png,
-                    input_path=in_path,
-                    output_path=out_path,
-                    target_color_hex=args.target_color,
-                    dry_run=args.dry_run,
-                )
-            )
-
-        for fut in as_completed(futures):
-            result = fut.result()
-            if result.status == "processed":
-                processed += 1
-                LOGGER.info(format_log(result))
-            elif result.status == "skipped":
-                skipped += 1
-                LOGGER.info(format_log(result))
-            else:
-                failed += 1
-                LOGGER.error(format_log(result))
+    summary = run_batch(
+        input_dir=args.input,
+        output_dir=args.output,
+        target_color=args.target_color,
+        recursive=args.recursive,
+        dry_run=args.dry_run,
+        workers=args.workers,
+        on_result=log_result,
+    )
 
     LOGGER.info(
         "Done | total=%d processed=%d skipped=%d failed=%d",
-        len(png_files),
-        processed,
-        skipped,
-        failed,
+        summary.total,
+        summary.processed,
+        summary.skipped,
+        summary.failed,
     )
-    return 0 if failed == 0 else 1
+    return 0 if summary.failed == 0 else 1
 
 
 if __name__ == "__main__":

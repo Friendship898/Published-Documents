@@ -11,6 +11,7 @@
 - 保留 alpha 透明通道
 - 支持递归处理目录
 - 支持并发处理、dry-run、单文件失败隔离
+- 提供命令行与可视化界面（Tkinter）
 
 ## 安装
 
@@ -20,7 +21,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## 用法
+## 命令行用法
 
 ```bash
 python main.py --input ./input_png --output ./output_png --target-color "#FF8A00"
@@ -32,8 +33,23 @@ python main.py --input ./input_png --output ./output_png --target-color "#FF8A00
 - `--output` 输出目录（必填）
 - `--target-color` 目标颜色，默认 `#FF8A00`
 - `--recursive` 递归扫描（默认开启）
+- `--no-recursive` 仅处理输入目录顶层 PNG
 - `--dry-run` 仅检测不写文件
 - `--workers` 并发数（默认 4）
+
+## 可视化界面用法
+
+```bash
+python gui.py
+```
+
+界面中可直接：
+
+- 选择输入目录与输出目录
+- 设置目标颜色
+- 勾选递归扫描 / Dry Run
+- 设置并发数
+- 查看逐文件处理日志和最终统计
 
 ## 日志字段
 

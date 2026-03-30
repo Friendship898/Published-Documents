@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from color_masks import build_semantic_weights
+from color_masks import SemanticMaskConfig, build_semantic_weights
 from recolor import hex_to_rgb01, semantic_soft_recolor
 
 
@@ -15,14 +15,13 @@ class ProcessResult:
     input_path: Path
     output_path: Path
     status: str
-    red_pixels: int = 0
-    magenta_pixels: int = 0
+    source_pixels: int = 0
+    highlight_pixels: int = 0
     message: str = ""
 
 
 def rgb_to_hsv_np(rgb: np.ndarray) -> np.ndarray:
     r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
-
     cmax = np.max(rgb, axis=-1)
     cmin = np.min(rgb, axis=-1)
     delta = cmax - cmin
@@ -42,7 +41,6 @@ def rgb_to_hsv_np(rgb: np.ndarray) -> np.ndarray:
     s = np.zeros_like(cmax)
     valid = cmax > 1e-8
     s[valid] = delta[valid] / cmax[valid]
-
     v = cmax
     return np.stack([h, s, v], axis=-1)
 
@@ -73,28 +71,35 @@ def hsv_to_rgb_np(hsv: np.ndarray) -> np.ndarray:
     rgb[m3] = np.stack([p[m3], q[m3], v[m3]], axis=-1)
     rgb[m4] = np.stack([t[m4], p[m4], v[m4]], axis=-1)
     rgb[m5] = np.stack([v[m5], p[m5], q[m5]], axis=-1)
-
     return rgb
 
 
 def recolor_image_semantic(
     rgba: np.ndarray,
+    source_color_hex: str,
     target_color_hex: str,
 ) -> tuple[np.ndarray, int, int, np.ndarray]:
     rgb = rgba[..., :3].astype(np.float32) / 255.0
     alpha = rgba[..., 3:4]
 
     hsv = rgb_to_hsv_np(rgb)
-    masks = build_semantic_weights(hsv, alpha[..., 0])
-    combined_w = masks["combined"]
 
+    source_rgb = np.array(hex_to_rgb01(source_color_hex), dtype=np.float32)
+    source_hsv = rgb_to_hsv_np(source_rgb[None, None, :])[0, 0, :]
     target_rgb = np.array(hex_to_rgb01(target_color_hex), dtype=np.float32)
     target_hsv = rgb_to_hsv_np(target_rgb[None, None, :])[0, 0, :]
+
+    masks = build_semantic_weights(
+        hsv,
+        alpha[..., 0],
+        config=SemanticMaskConfig(source_hue=float(source_hsv[0])),
+    )
+    combined_w = masks["combined"]
 
     mapped_hsv = semantic_soft_recolor(
         hsv=hsv,
         combined_w=combined_w,
-        magenta_link_w=masks["magenta_link"],
+        highlight_link_w=masks["highlight_link"],
         target_hsv=target_hsv,
     )
     mapped_rgb = hsv_to_rgb_np(mapped_hsv)
@@ -102,9 +107,9 @@ def recolor_image_semantic(
     w = combined_w[..., None]
     rgb_blend = rgb * (1.0 - w) + mapped_rgb * w
     rgb_uint8 = np.clip(np.round(rgb_blend * 255.0), 0, 255).astype(np.uint8)
-
     out = np.concatenate([rgb_uint8, alpha], axis=-1)
-    return out, int(masks["red_pixels"]), int(masks["magenta_pixels"]), combined_w
+
+    return out, int(masks["source_pixels"]), int(masks["highlight_pixels"]), combined_w
 
 
 def save_weight_mask(path: Path, weight: np.ndarray) -> None:
@@ -116,6 +121,7 @@ def save_weight_mask(path: Path, weight: np.ndarray) -> None:
 def process_png(
     input_path: Path,
     output_path: Path,
+    source_color_hex: str,
     target_color_hex: str,
     dry_run: bool = False,
     mode: str = "semantic_soft_recolor",
@@ -128,18 +134,18 @@ def process_png(
         if mode != "semantic_soft_recolor":
             raise ValueError(f"Unsupported mode: {mode}")
 
-        out_rgba, red_pixels, magenta_pixels, weight = recolor_image_semantic(
-            rgba, target_color_hex
+        out_rgba, source_pixels, highlight_pixels, weight = recolor_image_semantic(
+            rgba, source_color_hex, target_color_hex
         )
 
-        if red_pixels == 0 and magenta_pixels == 0:
+        if source_pixels == 0 and highlight_pixels == 0:
             return ProcessResult(
                 input_path=input_path,
                 output_path=output_path,
                 status="skipped",
-                red_pixels=0,
-                magenta_pixels=0,
-                message="no semantic red/magenta highlights matched",
+                source_pixels=0,
+                highlight_pixels=0,
+                message="no semantic source/highlight matched",
             )
 
         if not dry_run:
@@ -152,8 +158,8 @@ def process_png(
             input_path=input_path,
             output_path=output_path,
             status="processed",
-            red_pixels=red_pixels,
-            magenta_pixels=magenta_pixels,
+            source_pixels=source_pixels,
+            highlight_pixels=highlight_pixels,
             message="dry-run" if dry_run else "written",
         )
     except Exception as exc:
@@ -161,7 +167,7 @@ def process_png(
             input_path=input_path,
             output_path=output_path,
             status="failed",
-            red_pixels=0,
-            magenta_pixels=0,
+            source_pixels=0,
+            highlight_pixels=0,
             message=str(exc),
         )

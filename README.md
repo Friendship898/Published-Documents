@@ -19,14 +19,15 @@ pip install -r requirements.txt
 ## CLI 用法
 
 ```bash
-python main.py --input ./input_png --output ./output_png --target-color "#FF8A00" --mode semantic_soft_recolor
+python main.py --input ./input_png --output ./output_png --source-color "#FF0000" --target-color "#FF8A00" --mode semantic_soft_recolor
 ```
 
 ### 参数
 
 - `--input` 输入目录（必填）
 - `--output` 输出目录（必填）
-- `--target-color` 目标颜色（默认 `#FF8A00`）
+- `--source-color` 初始颜色（默认 `#FF0000`，即红色）
+- `--target-color` 目标颜色（默认 `#FF8A00`，即橙色）
 - `--mode` 处理模式（默认 `semantic_soft_recolor`）
 - `--recursive` / `--no-recursive` 递归扫描开关
 - `--dry-run` 只分析不写正式输出
@@ -45,7 +46,7 @@ python gui.py
 
 - 输入/输出目录选择
 - 模式选择（semantic_soft_recolor）
-- 目标颜色设置
+- 初始颜色与目标颜色设置
 - 递归、dry-run、mask 预览
 - 并发数、preview 数量、max-files 试跑
 - 实时日志（processed / skipped / failed）
@@ -71,7 +72,7 @@ python gui.py
 
 - 文件路径
 - 状态：`processed` / `skipped` / `failed`
-- 红色主区命中像素数 `red_pixels`
-- 洋红联动区命中像素数 `magenta_pixels`
+- 初始色主区命中像素数 `source_pixels`
+- 高亮联动区命中像素数 `highlight_pixels`
 - 输出路径
 - 错误信息

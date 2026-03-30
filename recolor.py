@@ -18,7 +18,7 @@ def blend_hue_circular(h0: np.ndarray, h1: np.ndarray, w: np.ndarray) -> np.ndar
 def semantic_soft_recolor(
     hsv: np.ndarray,
     combined_w: np.ndarray,
-    magenta_link_w: np.ndarray,
+    highlight_link_w: np.ndarray,
     target_hsv: np.ndarray,
     brightness_boost: float = 0.16,
 ) -> np.ndarray:
@@ -28,7 +28,7 @@ def semantic_soft_recolor(
 
     target_h, target_s, target_v = target_hsv
 
-    hue_bias = np.clip(target_h + magenta_link_w * 0.03, 0.0, 1.0)
+    hue_bias = np.clip(target_h + highlight_link_w * 0.03, 0.0, 1.0)
     h_new = blend_hue_circular(h, hue_bias, np.clip(combined_w * 0.95, 0.0, 1.0))
 
     sat_mix = 0.20 + 0.25 * combined_w
